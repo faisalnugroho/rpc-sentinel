@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RPC Sentinel — Consensus-backed RPC integrity checks</title>
+<meta name="description" content="Multiple GenLayer validators independently inspect an external RPC endpoint; only a consensus-approved normalized observation becomes the authoritative check result.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0e14; --bg2:#0f131c; --panel:#131926; --panel2:#182136;
+  --line:#24304a; --line2:#2e3d5c;
+  --tx:#e8edf6; --tx2:#9fb0cc; --tx3:#63768f;
+  --acc:#4da3ff; --acc2:#7cc0ff;
+  --ok:#3ecf8e; --warn:#f5b83d; --bad:#ff6b6b; --mut:#8b93a7;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --sans:'Inter',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:15px;line-height:1.55}
+a{color:var(--acc);text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:1060px;margin:0 auto;padding:0 22px}
+
+/* ---------- header ---------- */
+header{border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0d1220,#0b0e14)}
+.hd{display:flex;align-items:center;gap:14px;padding:18px 0 14px}
+.logo{display:flex;align-items:center;gap:11px}
+.logo-mark{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#1c3f6e,#0f2f6b);display:grid;place-items:center;border:1px solid var(--line2)}
+.logo-mark svg{width:20px;height:20px}
+h1{font-size:19px;font-weight:700;letter-spacing:-.2px}
+.sub{font-size:12.5px;color:var(--tx2)}
+.net{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--tx2);border:1px solid var(--line);border-radius:20px;padding:5px 12px;background:var(--bg2);white-space:nowrap}
+.net .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--mut);margin-right:6px;vertical-align:1px}
+.net.ok .dot{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.net.err{color:var(--bad)}
+.walletbar{margin-left:10px;font-family:var(--mono);font-size:11px;color:var(--tx3);border:1px solid var(--line);border-radius:20px;padding:5px 12px;background:var(--bg2);white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- pipeline diagram ---------- */
+.pipe{padding:26px 0 22px}
+.pipe-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--tx3);margin-bottom:14px;font-weight:600}
+.flow{display:grid;grid-template-columns:1fr 26px 1.15fr 26px 1.7fr 26px 1fr;gap:0;align-items:stretch}
+.node{border:1px solid var(--line2);border-radius:11px;padding:10px 12px;background:var(--panel);display:flex;flex-direction:column;justify-content:center;min-height:74px}
+.node b{font-size:12.5px;font-weight:600}
+.node span{font-size:11px;color:var(--tx2);margin-top:3px;line-height:1.4}
+.arrow{display:grid;place-items:center;color:var(--tx3);font-size:15px}
+.n-user{border-color:#2c5d8f}
+.n-cons{border-color:#3b6fd0;background:linear-gradient(180deg,#16233c,#131926)}
+.n-cons b{color:var(--acc2)}
+.n-val{border-style:dashed}
+.n-val b{color:var(--acc)}
+.n-val .vrow{font-family:var(--mono);font-size:10.5px;color:var(--tx2);display:flex;align-items:center;gap:7px;margin-top:2px}
+.n-val .vrow::before{content:"→";color:var(--acc)}
+.n-res{border-color:#2e7d55}
+.n-res b{color:var(--ok)}
+
+/* ---------- main grid ---------- */
+main{display:grid;grid-template-columns:1.6fr 1fr;gap:22px;padding:26px 0 40px}
+@media(max-width:880px){main{grid-template-columns:1fr}.flow{grid-template-columns:1fr;gap:8px}.arrow{transform:rotate(90deg);padding:2px 0}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:20px}
+.card h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2);font-weight:600;margin-bottom:14px}
+label{display:block;font-size:12px;color:var(--tx2);font-weight:500;margin:12px 0 5px}
+input[type=text],input[type=url],input[type=number]{width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:8px;padding:10px 12px;color:var(--tx);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s}
+input:focus{border-color:var(--acc)}
+.demo-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.demo-row button{font-family:var(--mono);font-size:10.5px;color:var(--tx2);background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer;transition:all .12s}
+.demo-row button:hover{color:var(--tx);border-color:var(--line2)}
+.runbtn{width:100%;margin-top:16px;background:linear-gradient(135deg,#2563eb,#1d4ed8);border:none;border-radius:9px;padding:12px;font-size:14px;font-weight:600;color:#fff;cursor:pointer;transition:filter .15s;display:flex;align-items:center;justify-content:center;gap:9px}
+.runbtn:hover{filter:brightness(1.12)}
+.runbtn:disabled{filter:grayscale(.6);cursor:not-allowed;opacity:.7}
+.note{font-size:11px;color:var(--tx3);margin-top:11px;line-height:1.5}
+.note b{color:var(--tx2)}
+
+/* ---------- status / result ---------- */
+.status{margin-top:18px;border-top:1px dashed var(--line);padding-top:16px;display:none}
+.status.show{display:block}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--tx3);border-top-color:var(--acc);border-radius:50%;animation:sp 0.9s linear infinite;vertical-align:-2px;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.status .line{font-size:12.5px;color:var(--tx2);font-family:var(--mono);display:flex;gap:8px;align-items:center;padding:4px 0}
+.verdict{display:flex;align-items:center;gap:14px;margin:8px 0 14px}
+.vbadge{font-family:var(--mono);font-weight:600;font-size:15px;border-radius:10px;padding:8px 16px;border:1.5px solid}
+.v-HEALTHY{color:var(--ok);border-color:var(--ok);background:rgba(62,207,142,.08)}
+.v-DEGRADED{color:var(--warn);border-color:var(--warn);background:rgba(245,184,61,.08)}
+.v-MISCONFIGURED{color:#c084fc;border-color:#c084fc;background:rgba(192,132,252,.08)}
+.v-STALE{color:#f59e0b;border-color:#f59e0b;background:rgba(245,158,11,.08)}
+.v-UNREACHABLE{color:var(--bad);border-color:var(--bad);background:rgba(255,107,107,.08)}
+.v-INCONSISTENT{color:#ff9f43;border-color:#ff9f43;background:rgba(255,159,67,.08)}
+.v-pending{color:var(--tx2);border-color:var(--tx3);background:rgba(139,147,167,.08)}
+.vwhy{font-size:12.5px;color:var(--tx2);line-height:1.5}
+.chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:12px 0}
+.chip{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.chip .k{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3)}
+.chip .v{font-family:var(--mono);font-size:12.5px;margin-top:2px;word-break:break-all}
+.ev{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:12px;margin-top:10px}
+.ev summary{cursor:pointer;font-size:12px;color:var(--tx2);font-weight:500}
+.ev pre{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--tx2);white-space:pre-wrap;word-break:break-all;max-height:300px;overflow:auto}
+.err{color:var(--bad);font-size:12.5px;font-family:var(--mono);margin-top:10px;white-space:pre-wrap}
+
+/* ---------- history ---------- */
+.hist-card h2{display:flex;align-items:center;gap:9px}
+.hist-card h2 button{margin-left:auto;font-size:11px;font-family:var(--mono);background:var(--bg2);color:var(--tx2);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+.hist{margin-top:6px}
+.hrow{display:grid;grid-template-columns:auto 1fr auto;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line);align-items:center;cursor:pointer;border-radius:6px}
+.hrow:hover{background:var(--panel2)}
+.hrow:last-child{border-bottom:none}
+.hrow .hid{font-family:var(--mono);font-size:11px;color:var(--tx3)}
+.hrow .hhost{font-size:12.5px;font-weight:500;word-break:break-all}
+.hrow .hmeta{font-size:10.5px;color:var(--tx3);font-family:var(--mono)}
+.hbadge{font-family:var(--mono);font-size:10.5px;border-radius:6px;padding:3px 9px;border:1px solid;white-space:nowrap}
+.h-HEALTHY{color:var(--ok);border-color:rgba(62,207,142,.5)}
+.h-DEGRADED{color:var(--warn);border-color:rgba(245,184,61,.5)}
+.h-MISCONFIGURED{color:#c084fc;border-color:rgba(192,132,252,.5)}
+.h-STALE{color:#f59e0b;border-color:rgba(245,158,11,.5)}
+.h-UNREACHABLE{color:var(--bad);border-color:rgba(255,107,107,.5)}
+.h-INCONSISTENT{color:#ff9f43;border-color:rgba(255,159,67,.5)}
+.h-pending{color:var(--tx3);border-color:var(--line2)}
+.h-consfail{color:#ff9f43;border-color:rgba(255,159,67,.5)}
+.histempty{color:var(--tx3);font-size:12px;padding:14px 2px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--tx3);font-size:12px}
+footer b{color:var(--tx2)}
+.disclaimer{max-width:760px;margin-top:8px;line-height:1.55;color:var(--tx3)}
+</style>
+</head>
+<body>
+<script src="genlayer-sdk.bundle.js"></script>
+<script src="contract-address.js"></script>
+
+<header>
+  <div class="wrap hd">
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#7cc0ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>
+        </svg>
+      </div>
+      <div>
+        <h1>RPC Sentinel</h1>
+        <div class="sub">Consensus-backed integrity checks for blockchain RPC endpoints.</div>
+      </div>
+    </div>
+    <div class="walletbar" id="walletbar">no burner wallet — created on first check</div>
+    <div class="net" id="net"><span class="dot"></span>connecting to Studionet…</div>
+  </div>
+</header>
+
+<section class="wrap pipe">
+  <div class="pipe-title">How a check runs — multiple independent validators, one consensus-approved result</div>
+  <div class="flow">
+    <div class="node n-user"><b>USER</b><span>submits a public RPC URL + expected chain ID</span></div>
+    <div class="arrow">↓</div>
+    <div class="node n-cons"><b>GENLAYER CONSENSUS</b><span>Intelligent Contract runs the probe round</span></div>
+    <div class="arrow">↓</div>
+    <div class="node n-val">
+      <b>RPC INDEPENDENT PROBES</b>
+      <div class="vrow">Validator A → RPC endpoint</div>
+      <div class="vrow">Validator B → RPC endpoint</div>
+      <div class="vrow">Validator C → RPC endpoint</div>
+      <span style="margin-top:5px">each independently probes + normalizes + classifies</span>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node n-res"><b>FINAL INTEGRITY RESULT</b><span>only the consensus-approved normalized observation is persisted</span></div>
+  </div>
+</section>
+
+<main class="wrap">
+  <!-- LEFT: check form + result -->
+  <div>
+    <div class="card">
+      <h2>Run an integrity check</h2>
+      <form id="checkform">
+        <label for="rpcurl">RPC endpoint URL (public, read-only, HTTPS)</label>
+        <input id="rpcurl" type="url" placeholder="https://eth.drpc.org" autocomplete="off" spellcheck="false" required>
+        <div class="demo-row" id="demorow">
+          <button type="button" data-url="https://eth.drpc.org" data-chain="1">Ethereum · drpc</button>
+          <button type="button" data-url="https://base-rpc.publicnode.com" data-chain="8453">Base · publicnode</button>
+          <button type="button" data-url="https://polygon-bor-rpc.publicnode.com" data-chain="137">Polygon · publicnode</button>
+          <button type="button" data-url="https://arbitrum-rpc.publicnode.com" data-chain="42161">Arbitrum · publicnode</button>
+        </div>
+        <label for="chainid">Expected chain ID</label>
+        <input id="chainid" type="number" min="1" placeholder="1" required>
+        <button class="runbtn" id="runbtn" type="submit">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/></svg>
+          Run Integrity Check
+        </button>
+      </form>
+      <div class="note">
+        Submit only <b>public, read-only</b> RPC endpoints. URLs are canonicalized
+        (HTTPS required; credentials, query strings, localhost/internal hosts and raw IPs
+        rejected) and never leave consensus — no keys are accepted. A check first
+        registers on-chain (<b>REQUESTED</b>), then a consensus round runs
+        (<b>pending</b> — leader-only data is never authoritative), and finally the
+        consensus-approved result is persisted.
+      </div>
+
+      <div class="status" id="status">
+        <div class="err" id="errmsg" style="display:none"></div>
+        <div id="phases">
+          <div class="line" id="ph1"><span class="spin"></span>registering check on-chain…</div>
+          <div class="line" id="ph2" style="display:none"><span class="spin"></span>consensus round running — validators independently probing…</div>
+          <div class="line" id="ph3" style="display:none"><span class="spin"></span>awaiting finalization…</div>
+        </div>
+        <div id="resultbox" style="display:none">
+          <div class="verdict">
+            <div class="vbadge" id="vbadge">HEALTHY</div>
+            <div class="vwhy" id="vwhy"></div>
+          </div>
+          <div class="chips" id="chips"></div>
+          <details class="ev">
+            <summary>Normalized evidence (consensus-approved) — JSON record</summary>
+            <pre id="evjson"></pre>
+          </details>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: history -->
+  <div class="card hist-card">
+    <h2>Check history <button id="histbtn" type="button">↻ refresh</button></h2>
+    <div class="note" style="margin:0 0 4px">Consensus-finalized checks recorded by RPC Sentinel.</div>
+    <div class="hist" id="hist"><div class="histempty">loading…</div></div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <b>RPC Sentinel</b> — a GenLayer Intelligent Contract demo. It answers one narrow
+    question: whether the endpoint currently behaves consistently with the expected
+    chain and basic JSON-RPC integrity requirements.
+    <div class="disclaimer">
+      It is not an endorsement that a provider is honest or malicious, not a safety or
+      availability guarantee, not a claim that an endpoint is canonical, and not a
+      network scanner. History is the app's own on-chain record, not an independent
+      archival oracle. Validity is limited to the exact probe defined in the
+      contract's public configuration.
+    </div>
+  </div>
+</footer>
+
+<script>
+"use strict";
+const el = id => document.getElementById(id);
+const CONTRACT = window.RPC_SENTINEL_CONTRACT;
+let client = null, wallet = null;
+const WKEY = "rpcsentinel_wallet";
+
+function sdk(){ return window.GenLayerSDK; }
+
+/* ---------- boot ---------- */
+async function boot(){
+  for (let i = 0; i < 100 && typeof window.GenLayerSDK === "undefined"; i++)
+    await new Promise(r => setTimeout(r, 100));
+  if (typeof window.GenLayerSDK === "undefined"){
+    el("net").classList.add("err");
+    el("net").textContent = "SDK failed to load";
+    return;
+  }
+  if (!CONTRACT){
+    el("net").classList.add("err");
+    el("net").textContent = "contract address not configured";
+    return;
+  }
+  try {
+    client = sdk().createClient({ chain: sdk().studionet });
+    const cfg = await client.readContract({
+      address: CONTRACT, functionName: "get_config", args: [] });
+    const d = JSON.parse(cfg);
+    el("net").classList.add("ok");
+    el("net").textContent = "Studionet · connected · probe v" + d.probe_version +
+      " · schema v" + d.schema_version;
+    loadHistory();
+  } catch (e){
+    el("net").classList.add("err");
+    el("net").textContent = "network unreachable";
+    el("hist").innerHTML = '<div class="histempty">history unavailable — network unreachable</div>';
+  }
+}
+
+/* ---------- wallet (burner, localStorage) ---------- */
+function loadWallet(){
+  try {
+    const raw = localStorage.getItem(WKEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || !d.pk) return null;
+    const account = sdk().createAccount(d.pk);
+    return { pk: d.pk, address: account.address, account };
+  } catch { return null; }
+}
+function ensureWallet(){
+  if (wallet) return wallet;
+  wallet = loadWallet();
+  if (!wallet){
+    const pk = sdk().generatePrivateKey();
+    const account = sdk().createAccount(pk);
+    wallet = { pk, address: account.address, account };
+    localStorage.setItem(WKEY, JSON.stringify({ pk }));
+  }
+  el("walletbar").textContent = "burner " + wallet.address.slice(0,10) + "…";
+  return wallet;
+}
+async function fundIfNeeded(){
+  const w = ensureWallet();
+  try {
+    await client.request({ method: "sim_fundAccount", params: [w.address, 5e18] });
+  } catch (e) { /* already funded or faucet hiccup — write will tell */ }
+}
+
+/* ---------- helpers ---------- */
+function showErr(msg){
+  el("errmsg").textContent = msg;
+  el("errmsg").style.display = "block";
+}
+function clearErr(){ el("errmsg").style.display = "none"; el("errmsg").textContent = ""; }
+function setPhase(n){
+  for (const i of [1,2,3]) el("ph"+i).style.display = (i <= n ? "flex" : "none");
+}
+
+const WHY = {
+  HEALTHY: "The endpoint responded with valid JSON-RPC data, matched the expected chain, and passed the defined integrity checks.",
+  MISCONFIGURED: "The endpoint responded, but its observed chain identity does not match the expected chain.",
+  STALE: "The endpoint responded and identified the expected chain, but its observed synchronization status fell outside the configured freshness policy.",
+  UNREACHABLE: "Validators could not obtain a valid RPC response.",
+  DEGRADED: "The endpoint is reachable, but one or more non-critical checks were unavailable or abnormal.",
+  INCONSISTENT: "Independent validator observations could not safely produce one consistent integrity classification."
+};
+
+function renderResult(rec){
+  el("phases").style.display = "none";
+  el("resultbox").style.display = "block";
+  let cls = rec.classification || "";
+  let badge = cls;
+  if (rec.status === "CONSENSUS_FAILED"){ cls = "pending"; badge = "INCONSISTENT"; }
+  if (!cls){ cls = "pending"; badge = rec.status === "REQUESTED" ? "PENDING" : "PENDING"; }
+  const vb = el("vbadge");
+  vb.textContent = badge;
+  vb.className = "vbadge v-" + (cls === "pending" ? "pending" : cls);
+  el("vwhy").textContent = rec.status === "CONSENSUS_FAILED"
+    ? WHY.INCONSISTENT + " (consensus failure — no result was persisted; you may re-run the check)"
+    : (WHY[cls] || "Consensus pending — leader-only data is never authoritative.");
+  const chips = [
+    ["Check ID", rec.check_id],
+    ["Target host", (rec.target_url||"").split("/")[2] || ""],
+    ["Expected chain", rec.expected_chain_id],
+    ["Consensus", rec.status],
+    ["Observed chain", rec.observed_chain_id || "—"],
+    ["Block height", rec.observed_block_number || "—"],
+    ["Freshness", rec.freshness_bucket || "—"],
+    ["JSON-RPC valid", rec.jsonrpc_valid === "true" ? "yes" : (rec.jsonrpc_valid === "" ? "—" : "no")],
+    ["Reachable", rec.rpc_reachable === "true" ? "yes" : (rec.rpc_reachable === "" ? "—" : "no")],
+    ["Client", rec.client_family || "—"],
+    ["Failure code", rec.failure_code || "—"],
+  ];
+  el("chips").innerHTML = chips.map(([k,v]) =>
+    '<div class="chip"><div class="k">'+k+'</div><div class="v">'+String(v).replace(/</g,"&lt;")+"</div></div>").join("");
+  el("evjson").textContent = JSON.stringify(rec, null, 2);
+}
+
+/* ---------- run a check ---------- */
+async function waitFinal(hash, onPhase){
+  for (let i = 0; i < 60; i++){
+    let rc;
+    try {
+      rc = await client.waitForTransactionReceipt({
+        hash, status: sdk().TransactionStatus.FINALIZED, interval: 4000, retries: 1 });
+    } catch (e){ rc = null; }
+    if (rc) return rc;
+    if (onPhase && i === 8) onPhase();
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  return null;
+}
+
+el("checkform").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  if (!client){ showErr("not connected to Studionet"); return; }
+  const url = el("rpcurl").value.trim();
+  const chain = String(parseInt(el("chainid").value, 10));
+  if (!url || !chain){ showErr("URL and expected chain ID are required"); return; }
+  clearErr();
+  el("status").classList.add("show");
+  el("resultbox").style.display = "none";
+  el("phases").style.display = "block";
+  setPhase(1);
+  el("runbtn").disabled = true;
+  try {
+    await fundIfNeeded();
+    // 1. register the check
+    const tx1 = await client.writeContract({
+      address: CONTRACT,
+      functionName: "request_check",
+      args: [url, chain],
+      account: wallet.account,
+    });
+    const rc1 = await waitFinal(tx1);
+    if (!rc1) throw new Error("request_check did not finalize in time");
+    setPhase(2);
+    // 2. consensus probe round
+    const data = await client.readContract({
+      address: CONTRACT,
+      functionName: "get_recent_checks",
+      args: [1],
+    });
+    let checkId = null;
+    try { checkId = JSON.parse(data)[0].check_id; } catch { checkId = null; }
+    if (!checkId) throw new Error("could not locate the new check id");
+    const tx2 = await client.writeContract({
+      address: CONTRACT,
+      functionName: "run_consensus",
+      args: [checkId],
+      account: wallet.account,
+    });
+    setPhase(3);
+    const rc2 = await waitFinal(tx2, () => setPhase(3));
+    if (!rc2) throw new Error("consensus round did not finalize in time");
+    // 3. read the persisted record (only consensus-approved fields)
+    const raw = await client.readContract({
+      address: CONTRACT, functionName: "get_check", args: [checkId] });
+    renderResult(JSON.parse(raw));
+    loadHistory();
+  } catch (e){
+    setPhase(0);
+    el("phases").style.display = "none";
+    showErr(String(e && e.message || e));
+  } finally {
+    el("runbtn").disabled = false;
+  }
+});
+
+document.querySelectorAll(".demo-row button").forEach(b => {
+  b.addEventListener("click", () => {
+    el("rpcurl").value = b.dataset.url;
+    el("chainid").value = b.dataset.chain;
+  });
+});
+
+/* ---------- history ---------- */
+async function loadHistory(){
+  const h = el("hist");
+  try {
+    const raw = await client.readContract({
+      address: CONTRACT, functionName: "get_recent_checks", args: [25] });
+    const recs = JSON.parse(raw);
+    if (!recs.length){
+      h.innerHTML = '<div class="histempty">No checks yet — run the first one.</div>';
+      return;
+    }
+    h.innerHTML = recs.map(r => {
+      const cls = r.status === "FINALIZED" ? (r.classification || "pending")
+        : (r.status === "CONSENSUS_FAILED" ? "consfail" : "pending");
+      const label = r.status === "FINALIZED" ? (r.classification || "—")
+        : (r.status === "CONSENSUS_FAILED" ? "CONSENSUS FAILED"
+           : (r.status === "REQUESTED" ? "PENDING" : r.status));
+      const when = r.finalized_at ? new Date(parseInt(r.finalized_at,10)*1000)
+        .toISOString().replace("T"," ").slice(0,19) + " UTC" : "";
+      return '<div class="hrow" data-id="'+r.check_id+'">'
+        + '<div><div class="hid">'+r.check_id+'</div>'
+        + '<div class="hhost">'+String(r.target_host).replace(/</g,"&lt;")+'</div>'
+        + '<div class="hmeta">chain '+r.expected_chain_id+(when?" · "+when:"")+'</div></div>'
+        + '<div class="hbadge h-'+cls+'">'+label+'</div></div>';
+    }).join("");
+    h.querySelectorAll(".hrow").forEach(row => {
+      row.addEventListener("click", async () => {
+        const raw = await client.readContract({
+          address: CONTRACT, functionName: "get_check", args: [row.dataset.id] });
+        el("status").classList.add("show");
+        renderResult(JSON.parse(raw));
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+  } catch (e){
+    h.innerHTML = '<div class="histempty">history unavailable</div>';
+  }
+}
+el("histbtn").addEventListener("click", loadHistory);
+
+boot();
+</script>
+</body>
+</html>

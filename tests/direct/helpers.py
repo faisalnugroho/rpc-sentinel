@@ -20,7 +20,7 @@ CONTRACT = str(ROOT / "contracts" / "rpc_sentinel.py")
 
 # Mock targets used across tests (hosts only; nothing here is claimed
 # healthy — live behavior is proven by the Studionet smoke run only).
-T_HOST = "https://eth.llamarpc.com"            # target endpoint
+T_HOST = "https://eth.drpc.org"                # target endpoint (mock key only)
 R_HOST = "https://ethereum-rpc.publicnode.com"  # chain-1 reference
 
 GETH = "Geth/v1.13.0-omnibus/linux-amd64/go1.21.5"
