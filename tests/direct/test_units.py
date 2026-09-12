@@ -299,4 +299,4 @@ class TestRequestLifecycle:
         recs = json.loads(c.get_recent_checks(10))
         assert len(recs) == 2
         assert recs[0]["check_id"] == "chk-2"  # newest first
-        assert recs[0]["target_host"] == "eth.llamarpc.com"
+        assert recs[0]["target_host"] == "eth.drpc.org"
