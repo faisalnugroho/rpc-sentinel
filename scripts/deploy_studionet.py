@@ -82,25 +82,42 @@ def wait_final(tx_hash, what, timeout_s=900):
 
 
 def run_ok(receipt, what):
-    """Gate on the consensus vote AND the execution result AND
-    per-validator agreement. FINALIZED != success."""
+    """Gate on consensus evidence AND the execution result.
+
+    Live receipts (Sep 2026 studionet) do NOT expose a simple
+    'MAJORITY_AGREE' string on leader_receipt[0].result — that slot
+    holds the leader's exec payload ({status: 'return'}). The real
+    consensus verdict lives in consensus_data.votes (per-validator
+    address -> 'agree'/'disagree'/'idle'), where 'idle' validators
+    are cancelled by quorum (normal). Success = agree votes form a
+    strict majority of non-idle votes. Plus: tx_execution_result_name
+    must not report an error (FINALIZED != success).
+    """
     cd = receipt.get("consensus_data", {}) or {}
-    vote = None
+    votes = cd.get("votes", {}) or {}
+    n_agree = sum(1 for v in votes.values() if v == "agree")
+    n_dis = sum(1 for v in votes.values() if v == "disagree")
+    n_idle = sum(1 for v in votes.values() if v == "idle")
+    vote = "MAJORITY_AGREE" if (n_agree and n_agree > n_dis) else (
+        "MAJORITY_DISAGREE" if n_dis else None)
     stderr = ""
     try:
         lr = cd.get("leader_receipt", [{}])[0]
-        vote = lr.get("result")
         stderr = (lr.get("genvm_result", {}) or {}).get("stderr", "") or ""
+        if vote is None and isinstance(lr.get("result"), dict):
+            # leader_only runs: payload status is the exec verdict
+            vote = lr["result"].get("status")
     except Exception:
         pass
     exec_name = receipt.get("tx_execution_result_name")
-    votes = cd.get("votes", {})
     print(f"  [{what}] vote={vote} exec={exec_name} "
-          f"votes={json.dumps(votes)[:160]}")
+          f"votes(agree/dis/idle)={n_agree}/{n_dis}/{n_idle}")
     if stderr:
         print("  stderr tail:", stderr[-500:])
     ok_exec = exec_name in ("FINISHED_WITH_RETURN", None)
-    ok_vote = vote in ("MAJORITY_AGREE", None)  # None on leader_only
+    ok_vote = vote in ("MAJORITY_AGREE", "return", None)
+    if n_dis:
+        ok_vote = False
     return ok_exec and ok_vote, exec_name, vote, stderr
 
 

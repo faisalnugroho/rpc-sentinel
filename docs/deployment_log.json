@@ -1,0 +1,98 @@
+{
+  "deploy": {
+    "tx": "0x6ea821784c26cf344f468e8892b30e68162923dd9e89ad58ac1c13a469b55de3",
+    "address": "0x7a8b2Dbf83164010453C364fF2F4f3D547e28750",
+    "code_sha256_16": "98c72e86da1f5b09",
+    "note": "deployed by scripts/deploy_studionet.py first run; that run exited 1 AFTER a successful full-consensus deploy because its vote parser expected a MAJORITY_AGREE string (live receipts expose consensus_data.votes instead). Contract verified live via get_config/get_stats. This is the ONE deployment; smoke attaches, never redeploys.",
+    "timestamp": 1789245275
+  },
+  "runs": [
+    {
+      "step": "S1-healthy",
+      "check_id": "chk-1",
+      "tx_request": "0x4913c95b4652ea6c79d5bcdbb59a4205cbfc8059fd76f76b96416d33a5f17600",
+      "tx_consensus": "0xef00d041241bcf3406460de780f827d754930ec61130f2c5b24ed6b06bda160e",
+      "vote": "MAJORITY_AGREE",
+      "exec": null,
+      "status": "FINALIZED",
+      "classification": "HEALTHY",
+      "expected": "HEALTHY",
+      "expectation_met": true,
+      "freshness_bucket": "CURRENT",
+      "failure_code": "",
+      "observed_chain_id": "1",
+      "observed_block_number": "25963728",
+      "consensus_ok": true,
+      "stderr_tail": ""
+    },
+    {
+      "step": "S2-misconfigured",
+      "check_id": "chk-2",
+      "tx_request": "0xead416df5a4f2959e0c148d60dfbf71328ae70babc006a20bf97a94967427f65",
+      "tx_consensus": "0xa0e833ba6d0daea86bd97e9c94295db2ef0906946c03b6dca54f38dd5f035e2e",
+      "vote": "MAJORITY_AGREE",
+      "exec": null,
+      "status": "FINALIZED",
+      "classification": "MISCONFIGURED",
+      "expected": "MISCONFIGURED",
+      "expectation_met": true,
+      "freshness_bucket": "STALE",
+      "failure_code": "chain_id_mismatch",
+      "observed_chain_id": "1",
+      "observed_block_number": "25963736",
+      "consensus_ok": true,
+      "stderr_tail": ""
+    },
+    {
+      "step": "S3-unreachable",
+      "check_id": "chk-3",
+      "tx_request": "0x224453a61ade5d5c57b98f9cdafdb820ab58ad19a795f91a49eef84fd0639f49",
+      "tx_consensus": "0x911bdd41ae0acfb7c7ed44da1994a03064dec7c514bfae4cdf0d188f23d28cfd",
+      "vote": "MAJORITY_AGREE",
+      "exec": null,
+      "status": "FINALIZED",
+      "classification": "UNREACHABLE",
+      "expected": "UNREACHABLE",
+      "expectation_met": true,
+      "freshness_bucket": "UNKNOWN",
+      "failure_code": "network_error",
+      "observed_chain_id": "",
+      "observed_block_number": "",
+      "consensus_ok": true,
+      "stderr_tail": ""
+    },
+    {
+      "step": "S4-determinism",
+      "check_id": "chk-4",
+      "tx_request": "0xa9c3dad97cd94985d0a0f62053977f5a399189fbd8f6fc4ed53c49d0ae6ce72b",
+      "tx_consensus": "0xd27a154c882dcf6b9fad1b4091b970628e66add041300251af0ea65e7cfc6a6c",
+      "vote": "MAJORITY_AGREE",
+      "exec": null,
+      "status": "FINALIZED",
+      "classification": "HEALTHY",
+      "expected": "HEALTHY",
+      "expectation_met": true,
+      "freshness_bucket": "CURRENT",
+      "failure_code": "",
+      "observed_chain_id": "1",
+      "observed_block_number": "25963752",
+      "consensus_ok": true,
+      "stderr_tail": ""
+    }
+  ],
+  "getters": {
+    "stats": {
+      "check_count": "4",
+      "finalized_count": "4",
+      "consensus_failed_count": "0",
+      "schema_version": "1",
+      "probe_version": "1"
+    },
+    "history_len": 3
+  },
+  "aggregate": {
+    "all_required_consensus_rounds_finalized": true,
+    "expected_live_outcomes_met": true,
+    "unexpected_live_failures": 0
+  }
+}

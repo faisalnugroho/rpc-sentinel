@@ -1,0 +1,33 @@
+deployer: 0xeb25a8d04f5b418f5F9C710762Fb14F8c15d1415
+
+=== S1: healthy live endpoint (full consensus) ===
+  [S1-healthy request] vote=MAJORITY_AGREE exec=None votes(a/d/i)=3/0/2
+  [S1-healthy] check_id=chk-1
+  [S1-healthy consensus] vote=MAJORITY_AGREE exec=None votes(a/d/i)=3/0/2
+  [S1-healthy] status=FINALIZED classification=HEALTHY bucket=CURRENT failure_code= expect=PASS
+
+=== S2: wrong expected chain ===
+  [S2-misconfigured request] vote=MAJORITY_AGREE exec=None votes(a/d/i)=3/0/2
+  [S2-misconfigured] check_id=chk-2
+  [S2-misconfigured consensus] vote=MAJORITY_AGREE exec=None votes(a/d/i)=3/0/2
+  [S2-misconfigured] status=FINALIZED classification=MISCONFIGURED bucket=STALE failure_code=chain_id_mismatch expect=PASS
+
+=== S3: unreachable endpoint ===
+  [S3-unreachable request] vote=MAJORITY_AGREE exec=None votes(a/d/i)=3/0/2
+  [S3-unreachable] check_id=chk-3
+  [S3-unreachable consensus] vote=MAJORITY_AGREE exec=None votes(a/d/i)=3/0/2
+  [S3-unreachable] status=FINALIZED classification=UNREACHABLE bucket=UNKNOWN failure_code=network_error expect=PASS
+
+=== S4: determinism re-run ===
+  [S4-determinism request] vote=MAJORITY_AGREE exec=None votes(a/d/i)=3/0/2
+  [S4-determinism] check_id=chk-4
+  [S4-determinism consensus] vote=MAJORITY_AGREE exec=None votes(a/d/i)=3/0/2
+  [S4-determinism] status=FINALIZED classification=HEALTHY bucket=CURRENT failure_code= expect=PASS
+
+=== G1: getters ===
+stats: {"check_count": "4", "finalized_count": "4", "consensus_failed_count": "0", "schema_version": "1", "probe_version": "1"}
+history entries for target: 3
+
+log written: /home/ubuntu/rpc-sentinel/docs/deployment_log.json
+DONE
+EXIT=0
