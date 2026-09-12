@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test deps
+        run: |
+          python -m pip install --upgrade pip
+          # genlayer-test >= 1.x is a breaking rewrite; the suite is
+          # written against the 0.29.x direct-mode API
+          pip install "genlayer-test==0.29.2" pytest eth_utils
+      - name: Pre-seed verified genvm tarball (from our release mirror)
+        run: |
+          # Upstream genlayerlabs/genvm release tag v0.3.0-rc7 was
+          # RE-PUBLISHED with different std-lib contents — pin-by-tag
+          # is not reliable. The verified original tarball is mirrored
+          # as a release asset on commitscope-escrow (our control):
+          #   repo:    faisalnugroho/commitscope-escrow
+          #   release: genvm-v0.3.0-rc7-verified
+          #   asset:   genvm-universal-v0.3.0-rc7.tar.xz (128.6 MB)
+          mkdir -p ~/.cache/gltest-direct
+          curl -sL -o ~/.cache/gltest-direct/genvm-universal-v0.3.0-rc7.tar.xz \
+            "https://github.com/faisalnugroho/commitscope-escrow/releases/download/genvm-v0.3.0-rc7-verified/genvm-universal-v0.3.0-rc7.tar.xz"
+          ls -la ~/.cache/gltest-direct/
+          # sanity: must be a real xz archive (magic bytes fd 37 7a 58)
+          head -c 4 ~/.cache/gltest-direct/genvm-universal-v0.3.0-rc7.tar.xz | od -A n -t x1
+      - name: Run direct-mode test suite
+        run: python -m pytest tests/direct/ -q --tb=short
+      - name: Lint contract
+        run: |
+          pip install genvm-linter genlayer-py
+          GENVMROOT=/tmp/genvmroot genvm-lint check contracts/rpc_sentinel.py

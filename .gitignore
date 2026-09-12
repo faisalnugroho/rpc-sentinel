@@ -1,0 +1,17 @@
+# deployer keys / local env — never commit
+.deployer.json
+*.key
+.env
+.env.local
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# build artifacts
+artifacts/
+node_modules/
+dist/
